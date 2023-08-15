@@ -113,7 +113,6 @@ ARG GO_VERSION
 RUN eval "$(gimme "${GO_VERSION}")" \
     && GOBIN=/usr/local/bin go install github.com/google/go-licenses@latest
 
-
 # stage for building containerd
 FROM go-build as build-containerd
 ARG TARGETARCH GO_VERSION
@@ -220,6 +219,43 @@ COPY --from=build-cni /_LICENSES/* /LICENSES/
 # copy over containerd-fuse-overlayfs and install
 COPY --from=build-fuse-overlayfs /fuse-overlayfs-snapshotter/bin/containerd-fuse-overlayfs-grpc /usr/local/bin/
 COPY --from=build-fuse-overlayfs /_LICENSES/* /LICENSES/
+
+
+
+
+# install go
+RUN apt-get update && apt-get install make && apt-get install -y wget
+RUN wget https://go.dev/dl/go1.21.0.linux-amd64.tar.gz
+RUN rm -rf /usr/local/go && tar -C /usr/local -xzf go1.21.0.linux-amd64.tar.gz
+ENV PATH=$PATH:/usr/local/go/bin
+
+#Clone virtual-kubelet/cri
+COPY cri /root/cri
+WORKDIR /root/cri
+RUN make build
+
+# cp files admin.conf, client.crt, client.key from outside container to inside container
+COPY admin.conf /root/cri/admin.conf
+COPY client.crt /root/cri/client.crt
+COPY client.key /root/cri/client.key
+COPY start.sh /root/cri/start.sh
+COPY 10-kindnet.conflist /etc/cni/net.d/10-kindest.conflist
+
+# define the environment variable
+ENV KUBERNETES_SERVICE_HOST=cluster1-control-plane
+ENV KUBERNETES_SERVICE_PORT=6443
+
+RUN apt-get install -y vim && apt-get install less -y
+
+
+
+
+
+
+
+
+
+
 
 # squash down to one compressed layer, without any lingering whiteout files etc
 FROM scratch
